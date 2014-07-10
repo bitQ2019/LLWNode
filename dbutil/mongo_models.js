@@ -49,7 +49,7 @@ function  monogoConn( ){
 		cpkey :String,
 		cpname :String,
 		ison : Number,//是否激活
-		callbackurl:  //
+		callbackurl: String //
 	});
 
 	var userinfo = new Schema(
@@ -59,10 +59,10 @@ function  monogoConn( ){
 		imsi:String,
 		imei:String,
 		uuid:String,
-		name:String
-		areacode:String //地区码
+		name:String,
+		areaid:String ,//地区码
 		phonenum:String  
-
+		
 		
 	});
 	
@@ -76,9 +76,8 @@ function  monogoConn( ){
 		token: String,
 		payment:Number,
 		timeOut: Number,// time out
-
 		gameid :String,
-		cpid :Number,
+		uuid:String, //更改
 		spinfo: []
 	});
 
@@ -118,7 +117,7 @@ function  monogoConn( ){
 		_id:String,
 		city:String ,
 		name:String,
-		number:String,
+		areacode:String,
 		province:String,
 		typename:String
 

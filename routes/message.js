@@ -6,8 +6,10 @@ var mongoModels = require('../dbutil/monogo_models.js');
 var spInfoModel = mongoModels.spInfoModel;
 var gameInfoModel = mongoModels.gameInfoModel;
 var cpInfoModel = mongoModels.cpInfoModel;
-var orderModel = mongoModels.orderModel;
-
+var userinfoModel = mongoModels.userInfoModel ;
+var orderInfoModel = mongoModels.OrderInfoModel;
+var configureModel = mongoModels.configureModel;
+var serverCenterAddressModel = mongoModels.serverCenterAddressModel;
 
 function isNullOrEmpty( reqParam){
 	return reqParam !== "" && reqParam !== null;
@@ -34,6 +36,7 @@ function getAllSpByMnc(imsi){
 	});
 	
 }
+
 
 
 
@@ -73,8 +76,8 @@ function packageSpAndPutInCache( spInfos, token){
 	
 	
 	function SPData(){
-		this.Spid = 0;
-		this.Spcount = 0;
+		this.spid = 0;
+		this.payment = 0;
 		
 	}
 	
@@ -84,7 +87,8 @@ function packageSpAndPutInCache( spInfos, token){
 	for( var i = 0 ; i < spInfos.length; i ++){
 		
 		SPData oneSp = new SPData();
-		oneSp.Spid = spInfos[i].Spid;
+		oneSp.Spid = spInfos[i].spid;
+		oneSp.payment = spInfos[i].payment;
 		spArr[i] = oneSp;
 		
 	}
@@ -105,8 +109,9 @@ function packageSpAndPutInCache( spInfos, token){
 }
 
 
-exports.payMessage = function(req, res){
 
+exports.payMessage = function(req, res){
+	
 	 
 	var retMessage = "";
 	
@@ -118,10 +123,14 @@ exports.payMessage = function(req, res){
 	var uuid = req.query.uuid;
 	var imsi = req.query.imsi;
 	var imei = req.query.imei;
-	var province = req.query.province;
-	
+	var areacode = req.query.areacode;
 	var phonenumber = req.query.phonenumber;
 	
+	var province = '';
+	var ydwlCode ='';
+	////////////////////////////////////////////
+	/////////////验证开始
+	/////////////
 	
 	if( !isNullOrEmpty(cpid) 
 			|| !isNullOrEmpty(gameid)
@@ -136,86 +145,151 @@ exports.payMessage = function(req, res){
 		console.log("all except phonenumber must not be null");
 		retMessage = setPayDefault();
 	}
+
 	
-	gameInfoModel.find({'gameid': gameid, 'gamekey': gamekey }, function( err, docs){
+	
+	
+	
+	gameInfoModel.find({'gameid': gameid, 'gamekey': gamekey }, function( err, gameDocs){
 		
-		if( err || docs){
+		if( err || gameDocs){
 			/**todo**/
 			console.log('no game matched!');
 			res.send(setPayDefault());
 			
-		}else{
+		}
+		else
+		{
+			 ///////////////////////////////////////////////////////////
+            //   验证完毕  查询 地区 表
+            //////////////////////////////////////////////////////////
+	
+		
+		     userinfoModel.find({'uuid':uuid,'imsi':imsi}, function(err,docs){
 			
-			var tmpImsi = imsi.substr(4,2);
-			var nowTM = new Date();
-			spInfoModel.find({'pmnc': tmpImsi , province : { $in: [province] }} , function( err, spDocs){
+		      if(err){
+			         console.error(err);
+		       }
+		      else if(docs)
+		      {
+			     	 console.log('user already exist');
+			 
+		      }
+    		  else
+    		  {
+    			
+    		
 				
-				if( !err && docs){
-					orderModel.find( {'cpid': cpid, 'date': { $lt : [nowTM.getMonth() + 1]}} , function( err, orderDocs){
-						
-						if( !err){
+    				var userinfoEntity = new userinfoMode({'createdate':new Date(),	'imsi' :imsi , 'imei' : imei , 'uuid' : uuid , 'phonenumber':phonenumber});
+    				
+    				userinfoEntity.save();
 
-							var allSp = [];
-							
-							/***
-							 * 日线
-							 */
-							for( var i = 0 ; i < spDocs.length; i ++){
-								var totalPay =0;
-								for( var j = 0 ; orderDocs !== null && j < orderDocs.length; j ++){
-									if( spDocs[i].spid in orderDocs[j].spinfo){
-										totalPay += orderDocs[j].spinfo.payment;
+				    
+		      }
+			  });
+		
+		     serverCenterAddressModel.find({'areacode':areacode},function(err,docs)
+                {
+                    if(err || docs)
+                    {
+                       console.log('no areacode matched!');
+                    }
+                
+                    province =  docs[0].province;
+                    ydwlCode = docs[0].typename;
+
+                    console.log(province+ydwlCode);
+
+                 	var nowTM = new Date();
+
+					spInfoModel.find({'spmnc': spmnc , province : { $in: [province] }} , function( err, spDocs){
+			
+					if( !err && docs)
+					{
+	 					var allSp = [];
+						var fixPayment = 0;			
+					    orderModel.find( {'userid': userid ,'date': { $lt : [nowTM.getMonth() + 1]}} , function( err, orderDocs)
+						{
+						        
+						    if( !err && docs)
+							{
+								 for(var i = 0; i < spDocs.length;i++)
+								 {  
+							        var totalPay =0;
+	                                var dayPay = 0; 
+							  /////////////月限查询
+								   for( var j = 0 ; j < orderDocs.length; j ++)
+								   {
+										if (spDocs[i].spid in orderDocs.spid)
+										{
+										   totalPay += orderDocs[j].spinfo.payment;
+										/////////////日限查询
+										   if( nowTM.getDay ==orderDocs[j].date.getDay())
+										   {
+										       dayPay += orderDocs[j].spinfo.payment;
+										   }
+										}
+										
+									}
+								//////////////////判断
+									if( totalPay < spDocs[i].monthlimit && dayPay < spDocs[i].daylimit)
+									{
+									    var tempCanPayment  = spDocs[i].daylimit - dayPay;
+									    fixPayment  +=  tempCanPayment;
+									    
+									    console.log(fixPayment);
+									    
+									    var obj = new Object();
+									     obj.id = spDocs[i].spid;
+									     obj.payment = tempCanPayment;
+										allSp.push( obj );
+										if(fixPayment >= payment)
+										 {
+										 	   orderModel.save( { date : new Date(), 
+                                               spNum : 0,
+                                               states : allSp.length,
+                                               uuid : uuid,
+                                               payment : payment,
+                                               spinfo : allSp
+                                           }, function( err, docs)
+                                           {
+                                
+                                			if( !err){
+                                    		var token = docs[0]._id;
+                                   			 res.send( packageSpAndPutInCache(allSp, token));
+                                			}
+										 });
+										 }
+										
 									}
 								}
-								/*if( totalPay < spDocs[i].dailylimit
-										&& spDocs[i].dailylimit - totalPay > payment 
-										&& ){
-									allSp.push( spDocs[i]);
-								}*/
-								
-								if( totalPay < spDocs[i].dailylimit
-										&& spDocs[i].dailylimit - totalPay > payment ){
-									allSp.push( spDocs[i]);
-								}
-								
 							}
-							orderModel.save( { date : new Date(), 
-								               spNum : 0,
-								               states : allSp.length,
-								               cpid : cpid,
-								               payment : payment,
-								               spinfo : allSp}, function( err, docs){
+							else
+							{
+							      console.log('查询order error');
+							}
 								
-								if( !err){
-									var token = docs[0]._id;
-									res.send( packageSpAndPutInCache(allSp, token));
-								}
-								
-							});
-							/***
-							 * 月线
-							 */
 							
-							
-						}
+						});
+					   
+					}
+				     else
+					{
+					        console.log('查询sp error');
+					}		
 						
 					});
 
-					
-				}
-			});
 
+                }); 
 		}
-		
-	});
-	
-	
-	
-};
+	        
+	        });
+}
+	     
 
-/**:
- * ��ѯ�����Ƿ�ɹ�
- */
+
+
 exports.reportMessage = function( req, res){
 	
 
@@ -224,9 +298,9 @@ exports.reportMessage = function( req, res){
 };
 
 
-/**
- * ��ѯ֧���Ƿ�ɹ�
- */
+
 exports.queryMessage = function( req, res){
+	
+	
 	
 };
