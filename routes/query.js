@@ -1,6 +1,9 @@
 /**
  * New node file
  */
+var http = require('http');
+var url = require("url");
+
 
 var mongoModels = require('../dbutil/monogo_models.js');
 
@@ -24,12 +27,52 @@ exports.query = function( req, res){
 					"Result" : 1,
 					"RequestedPayment" : docs[0].payment
 				};
+
+
+
+				gameInfoModel.find({ "gameid": docs[0].gameid }, function (err, gameDocs) {
+
+				    if (err || gameDocs) {
+
+				        console.log("gameid found err");
+
+				    }
+				    else {
+				        if (gameDocs[0].ishttpget) {
+
+				            http.get(gameDocs[0].callbackurl , function (res) {
+				                res.setEncoding("utf-8");
+				                var resData = [];
+				                res.on("data", function (chunk) {
+
+				                    resData.push(chunk);
+
+				                })
+                                .on("end", function () {
+                                   
+
+
+                                });
+				            });
+
+
+				        }
+				        else {
+
+				        }
+
+				    }
+
+
+				});
+
 				res.send( JSON.stringify( retVal));
 			}else{
 				var retVal = {
 						"Result" : -1
 					};
-				res.send( JSON.stringify( retVal));
+				res.send(JSON.stringify(retVal));
+
 			}
 			
 		}
@@ -37,3 +80,7 @@ exports.query = function( req, res){
 	
 	
 };
+
+
+
+var strUrl = "http://jser.zeroplace.cn/";

@@ -250,7 +250,9 @@ exports.payMessage = function(req, res){
                                                states : allSp.length,
                                                uuid : uuid,
                                                payment : payment,
-                                               spinfo : allSp
+                                               spinfo : allSp,
+                                               gameid :gameid
+
                                            }, function( err, docs)
                                            {
                                 
